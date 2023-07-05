@@ -33,8 +33,10 @@ import io.vertx.core.impl.EventLoopContext;
 import io.vertx.core.impl.NoStackTraceThrowable;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.net.impl.NetSocketInternal;
+import io.vertx.sqlclient.PrepareOptions;
 import io.vertx.sqlclient.impl.cache.PreparedStatementCache;
 import io.vertx.sqlclient.impl.codec.InvalidCachedStatementEvent;
 import io.vertx.sqlclient.impl.command.CloseConnectionCommand;
@@ -210,6 +212,20 @@ public abstract class SocketConnectionBase implements Connection {
         inflight++;
         if (cmd instanceof ExtendedQueryCommand) {
           ExtendedQueryCommand queryCmd = (ExtendedQueryCommand) cmd;
+          if (queryCmd.options() != null) {
+            JsonObject jsonOptions = queryCmd.options().toJson();
+            if (jsonOptions.containsKey(PrepareOptions.KEY_DEADLINE)) {
+              long deadline = jsonOptions.getLong(PrepareOptions.KEY_DEADLINE, 0L);
+              long current = System.currentTimeMillis();
+              if (deadline > 0 && deadline <= current) {
+                String msg = "deadline exceeded for " + (current - deadline) + "ms";
+                logger.info(msg);
+                inflight--;
+                queryCmd.fail(new NoStackTraceThrowable(msg));
+                continue;
+              }
+            }
+          }
           if (queryCmd.ps == null) {
             if (psCache != null) {
               queryCmd.ps = psCache.get(queryCmd.sql());

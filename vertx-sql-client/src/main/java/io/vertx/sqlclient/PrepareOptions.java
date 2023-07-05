@@ -22,6 +22,8 @@ import io.vertx.core.json.JsonObject;
 @DataObject
 public class PrepareOptions {
 
+  public static final String KEY_DEADLINE = "_deadline";
+
   private JsonObject json;
 
   public PrepareOptions() {
